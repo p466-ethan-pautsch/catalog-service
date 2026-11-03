@@ -2,9 +2,12 @@ package com.polarbookshop.catalogservice.web;
 
 import com.polarbookshop.catalogservice.domain.Book;
 import com.polarbookshop.catalogservice.domain.BookService;
+import com.polarbookshop.catalogservice.domain.BookNotFoundException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("books")
@@ -39,7 +42,22 @@ public class BookController {
     }
 
     @PutMapping("{isbn}")
-    public Book put(@PathVariable String isbn, @Valid @RequestBody Book book) {
-        return bookService.editBookDetails(isbn, book);
+    public ResponseEntity<Book> put(@PathVariable String isbn, @Valid @RequestBody Book book) {
+        boolean exists = false;
+
+        try {
+            bookService.viewBookDetails(isbn);
+            exists = true;
+        } catch (BookNotFoundException ex) {
+            // A missing book will be created.
+        }
+
+        Book savedBook = bookService.editBookDetails(isbn, book);
+
+        if (exists) {
+            return ResponseEntity.ok(savedBook);
+        }
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(savedBook);
     }
 }
