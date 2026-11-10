@@ -1,22 +1,25 @@
 package com.polarbookshop.catalogservice.web;
 
+import com.polarbookshop.catalogservice.domain.Book;
 import com.polarbookshop.catalogservice.domain.BookAlreadyExistsException;
 import com.polarbookshop.catalogservice.domain.BookNotFoundException;
 import com.polarbookshop.catalogservice.domain.BookService;
-import com.polarbookshop.catalogservice.domain.Book;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(BookController.class)
@@ -74,8 +77,8 @@ class BookControllerMvcTests {
     @Test
     void whenPutExistingBookThenShouldReturn200() throws Exception {
         String isbn = "1234567890";
-        var existingBook = new Book(isbn, "Original", "Author", 9.90);
-        var updatedBook = new Book(isbn, "Updated", "Author", 12.50);
+        var existingBook = Book.of(isbn, "Original", "Author", 9.90);
+        var updatedBook = Book.of(isbn, "Updated", "Author", 12.50);
 
         given(bookService.viewBookDetails(isbn)).willReturn(existingBook);
         given(bookService.editBookDetails(any(), any())).willReturn(updatedBook);
@@ -96,7 +99,7 @@ class BookControllerMvcTests {
     @Test
     void whenPutNewBookThenShouldReturn201() throws Exception {
         String isbn = "1234567899";
-        var newBook = new Book(isbn, "New Book", "Author", 9.90);
+        var newBook = Book.of(isbn, "New Book", "Author", 9.90);
 
         given(bookService.viewBookDetails(isbn))
                 .willThrow(new BookNotFoundException(isbn));
@@ -113,5 +116,18 @@ class BookControllerMvcTests {
                             }
                             """))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void whenAuthorProvidedThenReturnMatchingBooks() throws Exception {
+        var book = Book.of("1111111111", "Book One", "Lewis", 12.90);
+
+        given(bookService.viewBooksByAuthor("Lewis"))
+                .willReturn(List.of(book));
+
+        mockMvc.perform(get("/books").param("author", "Lewis"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].isbn").value("1111111111"))
+                .andExpect(jsonPath("$[0].author").value("Lewis"));
     }
 }

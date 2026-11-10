@@ -1,3 +1,14 @@
+spring:
+  application:
+    name: catalog-service
+  datasource:
+    url: jdbc:postgresql://localhost:5433/polardb_catalog
+    username: user
+    password: password
+    hikari:
+      connection-timeout: 2000
+      maximum-pool-size: 5
+
 server:
   port: 9001
   tomcat:

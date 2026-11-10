@@ -16,6 +16,10 @@ public class BookService {
         return bookRepository.findAll();
     }
 
+    public Iterable<Book> viewBooksByAuthor(String author) {
+        return bookRepository.findAllByAuthor(author);
+    }
+
     public Book viewBookDetails(String isbn) {
         return bookRepository.findByIsbn(isbn)
                 .orElseThrow(() -> new BookNotFoundException(isbn));
@@ -35,9 +39,17 @@ public class BookService {
     public Book editBookDetails(String isbn, Book book) {
         return bookRepository.findByIsbn(isbn)
                 .map(existing -> {
-                    // Everything may change except the identifier.
-                    var updated = new Book(existing.isbn(),
-                            book.title(), book.author(), book.price());
+                    var updated = new Book(
+                            existing.id(),
+                            existing.isbn(),
+                            book.title(),
+                            book.author(),
+                            book.publisher(),
+                            book.price(),
+                            existing.createdDate(),
+                            existing.lastModifiedDate(),
+                            existing.version()
+                    );
                     return bookRepository.save(updated);
                 })
                 .orElseGet(() -> addBookToCatalog(book));

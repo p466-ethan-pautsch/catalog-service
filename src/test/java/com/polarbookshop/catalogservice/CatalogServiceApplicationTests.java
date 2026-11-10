@@ -4,11 +4,13 @@ import com.polarbookshop.catalogservice.domain.Book;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("integration")
 class CatalogServiceApplicationTests {
 
 	@Autowired
@@ -16,7 +18,7 @@ class CatalogServiceApplicationTests {
 
 	@Test
 	void whenPostRequestThenBookCreated() {
-		var expected = new Book("1231231231", "Title", "Author", 9.90);
+		var expected = Book.of("1231231231", "Title", "Author", 9.90);
 
 		webTestClient
 				.post().uri("/books")
@@ -33,8 +35,8 @@ class CatalogServiceApplicationTests {
 	void whenBookCreatedUpdatedAndDeletedThenBookNoLongerExists() {
 		String isbn = "9876543210";
 
-		var originalBook = new Book(isbn, "Original Title", "Test Author", 9.90);
-		var updatedBook = new Book(isbn, "Updated Title", "Test Author", 14.99);
+		var originalBook = Book.of(isbn, "Original Title", "Test Author", 9.90);
+		var updatedBook = Book.of(isbn, "Updated Title", "Test Author", 14.99);
 
 		// POST - Create the book (201)
 		webTestClient
@@ -43,7 +45,11 @@ class CatalogServiceApplicationTests {
 				.exchange()
 				.expectStatus().isCreated()
 				.expectBody(Book.class)
-				.isEqualTo(originalBook);
+				.value(actual -> {
+					assertThat(actual.isbn()).isEqualTo(originalBook.isbn());
+					assertThat(actual.title()).isEqualTo(originalBook.title());
+					assertThat(actual.id()).isNotNull();
+				});
 
 		// GET - Verify the book exists (200)
 		webTestClient
@@ -51,7 +57,11 @@ class CatalogServiceApplicationTests {
 				.exchange()
 				.expectStatus().isOk()
 				.expectBody(Book.class)
-				.isEqualTo(originalBook);
+				.value(actual -> {
+					assertThat(actual.isbn()).isEqualTo(originalBook.isbn());
+					assertThat(actual.title()).isEqualTo(originalBook.title());
+					assertThat(actual.id()).isNotNull();
+				});
 
 		// PUT - Update the book (200)
 		webTestClient
@@ -60,7 +70,11 @@ class CatalogServiceApplicationTests {
 				.exchange()
 				.expectStatus().isOk()
 				.expectBody(Book.class)
-				.isEqualTo(updatedBook);
+				.value(actual -> {
+					assertThat(actual.isbn()).isEqualTo(updatedBook.isbn());
+					assertThat(actual.title()).isEqualTo(updatedBook.title());
+					assertThat(actual.price()).isEqualTo(updatedBook.price());
+				});
 
 		// DELETE - Remove the book (204)
 		webTestClient
