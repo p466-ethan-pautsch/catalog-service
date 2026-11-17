@@ -1,4 +1,3 @@
-
 name: Commit Stage
 on: push
 
@@ -12,14 +11,15 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-24.04
     permissions:
-      contents: read            # check out the repository
-      security-events: write    # upload the vulnerability report
+      contents: read
+      security-events: write
+
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -31,7 +31,7 @@ jobs:
           ./gradlew build
 
       - name: Code vulnerability scanning
-        uses: anchore/scan-action@v6
+        uses: anchore/scan-action@v7
         id: scan
         with:
           path: "${{ github.workspace }}"
@@ -40,8 +40,8 @@ jobs:
           output-format: sarif
 
       - name: Upload vulnerability report
-        uses: github/codeql-action/upload-sarif@v3
-        if: success() || failure()
+        if: ${{ steps.scan.outputs.sarif != '' }}
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ${{ steps.scan.outputs.sarif }}
 
@@ -53,16 +53,17 @@ jobs:
   package:
     name: Package and Publish
     if: ${{ github.ref == 'refs/heads/main' }}
-    needs: [ build ]
+    needs: [build]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
       security-events: write
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -75,18 +76,19 @@ jobs:
             --imageName ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
 
       - name: Image vulnerability scan
-        uses: anchore/scan-action@v6
+        uses: anchore/scan-action@v7
         id: scan
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
           fail-build: false
           severity-cutoff: high
+          output-format: sarif
 
       - name: Upload vulnerability report
-        uses: github/codeql-action/upload-sarif@v3
-        if: success() || failure()
+        if: ${{ steps.scan.outputs.sarif != '' }}
+        uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: "${{ steps.scan.outputs.sarif }}"
+          sarif_file: ${{ steps.scan.outputs.sarif }}
 
       - name: Log into the registry
         uses: docker/login-action@v3
