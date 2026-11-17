@@ -10,6 +10,7 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jdbc.core.JdbcAggregateTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.security.test.context.support.WithMockUser;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -106,5 +107,39 @@ class BookRepositoryJdbcTests {
                 .extracting(Book::isbn)
                 .contains("1111111111", "2222222222")
                 .doesNotContain("3333333333");
+    }
+
+    @Test
+    void whenCreateBookNotAuthenticatedThenNoAuditMetadata() {
+        var created = bookRepository.save(
+                Book.of(
+                        "1232343456",
+                        "Title",
+                        "Author",
+                        "Polarsophia",
+                        12.90
+                )
+        );
+
+        assertThat(created.createdBy()).isNull();
+        assertThat(created.lastModifiedBy()).isNull();
+    }
+
+    @Test
+    @WithMockUser("john")
+    void whenCreateBookAuthenticatedThenAuditMetadata() {
+        var created = bookRepository.save(
+                Book.of(
+                        "1232343457",
+                        "Title",
+                        "Author",
+                        "Polarsophia",
+                        12.90
+
+                )
+        );
+
+        assertThat(created.createdBy()).isEqualTo("john");
+        assertThat(created.lastModifiedBy()).isEqualTo("john");
     }
 }

@@ -1,14 +1,17 @@
 package com.polarbookshop.catalogservice.web;
 
+import com.polarbookshop.catalogservice.config.SecurityConfig;
 import com.polarbookshop.catalogservice.domain.Book;
 import com.polarbookshop.catalogservice.domain.BookAlreadyExistsException;
 import com.polarbookshop.catalogservice.domain.BookNotFoundException;
 import com.polarbookshop.catalogservice.domain.BookService;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -16,12 +19,15 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@Import(SecurityConfig.class)
 @WebMvcTest(BookController.class)
 class BookControllerMvcTests {
 
@@ -31,9 +37,13 @@ class BookControllerMvcTests {
     @MockitoBean
     private BookService bookService;
 
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
+
     @Test
     void whenGetBookNotExistingThenShouldReturn404() throws Exception {
         String isbn = "7373731394";
+
         given(bookService.viewBookDetails(isbn))
                 .willThrow(BookNotFoundException.class);
 
@@ -47,6 +57,8 @@ class BookControllerMvcTests {
                 .willThrow(new BookAlreadyExistsException("1234567890"));
 
         mockMvc.perform(post("/books")
+                        .with(jwt().authorities(
+                                new SimpleGrantedAuthority("ROLE_employee")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -62,6 +74,8 @@ class BookControllerMvcTests {
     @Test
     void whenPostInvalidBookThenShouldReturn400() throws Exception {
         mockMvc.perform(post("/books")
+                        .with(jwt().authorities(
+                                new SimpleGrantedAuthority("ROLE_employee")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -77,57 +91,96 @@ class BookControllerMvcTests {
     @Test
     void whenPutExistingBookThenShouldReturn200() throws Exception {
         String isbn = "1234567890";
+
         var existingBook = Book.of(isbn, "Original", "Author", 9.90);
         var updatedBook = Book.of(isbn, "Updated", "Author", 12.50);
 
-        given(bookService.viewBookDetails(isbn)).willReturn(existingBook);
-        given(bookService.editBookDetails(any(), any())).willReturn(updatedBook);
+        given(bookService.viewBookDetails(isbn))
+                .willReturn(existingBook);
+
+        given(bookService.editBookDetails(any(), any()))
+                .willReturn(updatedBook);
 
         mockMvc.perform(put("/books/" + isbn)
+                        .with(jwt().authorities(
+                                new SimpleGrantedAuthority("ROLE_employee")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {
-                              "isbn": "1234567890",
-                              "title": "Updated",
-                              "author": "Author",
-                              "price": 12.50
-                            }
-                            """))
+                                {
+                                  "isbn": "1234567890",
+                                  "title": "Updated",
+                                  "author": "Author",
+                                  "price": 12.50
+                                }
+                                """))
                 .andExpect(status().isOk());
     }
 
     @Test
     void whenPutNewBookThenShouldReturn201() throws Exception {
         String isbn = "1234567899";
+
         var newBook = Book.of(isbn, "New Book", "Author", 9.90);
 
         given(bookService.viewBookDetails(isbn))
                 .willThrow(new BookNotFoundException(isbn));
-        given(bookService.editBookDetails(any(), any())).willReturn(newBook);
+
+        given(bookService.editBookDetails(any(), any()))
+                .willReturn(newBook);
 
         mockMvc.perform(put("/books/" + isbn)
+                        .with(jwt().authorities(
+                                new SimpleGrantedAuthority("ROLE_employee")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {
-                              "isbn": "1234567899",
-                              "title": "New Book",
-                              "author": "Author",
-                              "price": 9.90
-                            }
-                            """))
+                                {
+                                  "isbn": "1234567899",
+                                  "title": "New Book",
+                                  "author": "Author",
+                                  "price": 9.90
+                                }
+                                """))
                 .andExpect(status().isCreated());
     }
 
     @Test
     void whenAuthorProvidedThenReturnMatchingBooks() throws Exception {
-        var book = Book.of("1111111111", "Book One", "Lewis", 12.90);
+        var book = Book.of(
+                "1111111111",
+                "Book One",
+                "Lewis",
+                12.90
+        );
 
         given(bookService.viewBooksByAuthor("Lewis"))
                 .willReturn(List.of(book));
 
-        mockMvc.perform(get("/books").param("author", "Lewis"))
+        mockMvc.perform(get("/books")
+                        .param("author", "Lewis"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].isbn").value("1111111111"))
                 .andExpect(jsonPath("$[0].author").value("Lewis"));
+    }
+
+    @Test
+    void whenDeleteBookWithEmployeeRoleThen204() throws Exception {
+        mockMvc.perform(delete("/books/7373731394")
+                        .with(jwt().authorities(
+                                new SimpleGrantedAuthority("ROLE_employee"))))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void whenDeleteBookWithCustomerRoleThen403() throws Exception {
+        mockMvc.perform(delete("/books/7373731394")
+                        .with(jwt().authorities(
+                                new SimpleGrantedAuthority("ROLE_customer"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void whenDeleteBookNotAuthenticatedThen401() throws Exception {
+        mockMvc.perform(delete("/books/7373731394"))
+                .andExpect(status().isUnauthorized());
     }
 }

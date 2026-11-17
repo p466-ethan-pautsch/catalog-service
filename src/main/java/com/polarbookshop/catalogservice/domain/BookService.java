@@ -7,7 +7,6 @@ public class BookService {
 
     private final BookRepository bookRepository;
 
-    // Constructor injection: the dependency is required, final, and never null.
     public BookService(BookRepository bookRepository) {
         this.bookRepository = bookRepository;
     }
@@ -29,6 +28,7 @@ public class BookService {
         if (bookRepository.existsByIsbn(book.isbn())) {
             throw new BookAlreadyExistsException(book.isbn());
         }
+
         return bookRepository.save(book);
     }
 
@@ -48,8 +48,11 @@ public class BookService {
                             book.price(),
                             existing.createdDate(),
                             existing.lastModifiedDate(),
+                            existing.createdBy(),
+                            existing.lastModifiedBy(),
                             existing.version()
                     );
+
                     return bookRepository.save(updated);
                 })
                 .orElseGet(() -> addBookToCatalog(book));

@@ -1,31 +1,94 @@
 package com.polarbookshop.catalogservice;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.polarbookshop.catalogservice.domain.Book;
+import dasniko.testcontainers.keycloak.KeycloakContainer;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration")
+@Testcontainers
 class CatalogServiceApplicationTests {
+
+	@Container
+	static KeycloakContainer keycloak =
+			new KeycloakContainer("quay.io/keycloak/keycloak:26.0")
+					.withRealmImportFile("test-realm-config.json");
+
+	@DynamicPropertySource
+	static void keycloakProperties(DynamicPropertyRegistry registry) {
+		registry.add(
+				"spring.security.oauth2.resourceserver.jwt.issuer-uri",
+				() -> keycloak.getAuthServerUrl() + "/realms/PolarBookshop"
+		);
+	}
+
+	private static String isabelleToken;
+	private static String bjornToken;
+
+	@BeforeAll
+	static void generateAccessTokens() {
+		var webClient = WebClient.builder()
+				.baseUrl(
+						keycloak.getAuthServerUrl()
+								+ "/realms/PolarBookshop/protocol/openid-connect/token"
+				)
+				.build();
+
+		isabelleToken = tokenFor("isabelle", webClient);
+		bjornToken = tokenFor("bjorn", webClient);
+	}
+
+	private static String tokenFor(String username, WebClient webClient) {
+		var response = webClient.post()
+				.body(
+						BodyInserters
+								.fromFormData("grant_type", "password")
+								.with("client_id", "polar-test")
+								.with("username", username)
+								.with("password", "password")
+				)
+				.retrieve()
+				.bodyToMono(JsonNode.class)
+				.block();
+
+		return response.get("access_token").asText();
+	}
 
 	@Autowired
 	private WebTestClient webTestClient;
 
 	@Test
 	void whenPostRequestThenBookCreated() {
-		var expected = Book.of("1231231231", "Title", "Author", 9.90);
+		var expected = Book.of(
+				"1231231231",
+				"Title",
+				"Author",
+				9.90
+		);
 
 		webTestClient
-				.post().uri("/books")
+				.post()
+				.uri("/books")
+				.headers(headers -> headers.setBearerAuth(isabelleToken))
 				.bodyValue(expected)
 				.exchange()
 				.expectStatus().isCreated()
-				.expectBody(Book.class).value(actual -> {
+				.expectBody(Book.class)
+				.value(actual -> {
 					assertThat(actual).isNotNull();
 					assertThat(actual.isbn()).isEqualTo(expected.isbn());
 				});
@@ -35,12 +98,24 @@ class CatalogServiceApplicationTests {
 	void whenBookCreatedUpdatedAndDeletedThenBookNoLongerExists() {
 		String isbn = "9876543210";
 
-		var originalBook = Book.of(isbn, "Original Title", "Test Author", 9.90);
-		var updatedBook = Book.of(isbn, "Updated Title", "Test Author", 14.99);
+		var originalBook = Book.of(
+				isbn,
+				"Original Title",
+				"Test Author",
+				9.90
+		);
 
-		// POST - Create the book (201)
+		var updatedBook = Book.of(
+				isbn,
+				"Updated Title",
+				"Test Author",
+				14.99
+		);
+
 		webTestClient
-				.post().uri("/books")
+				.post()
+				.uri("/books")
+				.headers(headers -> headers.setBearerAuth(isabelleToken))
 				.bodyValue(originalBook)
 				.exchange()
 				.expectStatus().isCreated()
@@ -51,9 +126,9 @@ class CatalogServiceApplicationTests {
 					assertThat(actual.id()).isNotNull();
 				});
 
-		// GET - Verify the book exists (200)
 		webTestClient
-				.get().uri("/books/{isbn}", isbn)
+				.get()
+				.uri("/books/{isbn}", isbn)
 				.exchange()
 				.expectStatus().isOk()
 				.expectBody(Book.class)
@@ -63,9 +138,10 @@ class CatalogServiceApplicationTests {
 					assertThat(actual.id()).isNotNull();
 				});
 
-		// PUT - Update the book (200)
 		webTestClient
-				.put().uri("/books/{isbn}", isbn)
+				.put()
+				.uri("/books/{isbn}", isbn)
+				.headers(headers -> headers.setBearerAuth(isabelleToken))
 				.bodyValue(updatedBook)
 				.exchange()
 				.expectStatus().isOk()
@@ -76,16 +152,70 @@ class CatalogServiceApplicationTests {
 					assertThat(actual.price()).isEqualTo(updatedBook.price());
 				});
 
-		// DELETE - Remove the book (204)
 		webTestClient
-				.delete().uri("/books/{isbn}", isbn)
+				.delete()
+				.uri("/books/{isbn}", isbn)
+				.headers(headers -> headers.setBearerAuth(isabelleToken))
 				.exchange()
 				.expectStatus().isNoContent();
 
-		// GET - Verify the book no longer exists (404)
 		webTestClient
-				.get().uri("/books/{isbn}", isbn)
+				.get()
+				.uri("/books/{isbn}", isbn)
 				.exchange()
 				.expectStatus().isNotFound();
+	}
+
+	@Test
+	void whenPostAsEmployeeThen201() {
+		var book = Book.of(
+				"1111111111",
+				"Atlas",
+				"Polar",
+				10.0
+		);
+
+		webTestClient
+				.post()
+				.uri("/books")
+				.headers(headers -> headers.setBearerAuth(isabelleToken))
+				.bodyValue(book)
+				.exchange()
+				.expectStatus().isCreated();
+	}
+
+	@Test
+	void whenPostAsCustomerThen403() {
+		var book = Book.of(
+				"2222222222",
+				"Atlas",
+				"Polar",
+				10.0
+		);
+
+		webTestClient
+				.post()
+				.uri("/books")
+				.headers(headers -> headers.setBearerAuth(bjornToken))
+				.bodyValue(book)
+				.exchange()
+				.expectStatus().isForbidden();
+	}
+
+	@Test
+	void whenPostUnauthenticatedThen401() {
+		var book = Book.of(
+				"3333333333",
+				"Atlas",
+				"Polar",
+				10.0
+		);
+
+		webTestClient
+				.post()
+				.uri("/books")
+				.bodyValue(book)
+				.exchange()
+				.expectStatus().isUnauthorized();
 	}
 }
