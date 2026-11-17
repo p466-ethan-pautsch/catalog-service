@@ -1,7 +1,5 @@
 package com.polarbookshop.catalogservice.domain;
 
-import java.util.Optional;
-
 import com.polarbookshop.catalogservice.config.DataConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,8 +7,10 @@ import org.springframework.boot.test.autoconfigure.data.jdbc.DataJdbcTest;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jdbc.core.JdbcAggregateTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
+
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -62,6 +62,7 @@ class BookRepositoryJdbcTests {
     @Test
     void existsByIsbnWhenExisting() {
         var book = Book.of("1234567893", "Title", "Author", 12.90);
+
         jdbcAggregateTemplate.insert(book);
 
         assertThat(bookRepository.existsByIsbn("1234567893")).isTrue();
@@ -75,6 +76,7 @@ class BookRepositoryJdbcTests {
     @Test
     void deleteByIsbnWhenExisting() {
         var book = Book.of("1234567895", "Title", "Author", 12.90);
+
         jdbcAggregateTemplate.insert(book);
 
         bookRepository.deleteByIsbn("1234567895");
@@ -93,9 +95,9 @@ class BookRepositoryJdbcTests {
 
     @Test
     void findBooksByAuthor() {
-        var book1 = Book.of("1111111111", "Book One", "Lewis", 12.90);
-        var book2 = Book.of("2222222222", "Book Two", "Lewis", 14.90);
-        var book3 = Book.of("3333333333", "Book Three", "Tolkien", 19.90);
+        var book1 = Book.of("4444444441", "Book One", "Lewis", 12.90);
+        var book2 = Book.of("4444444442", "Book Two", "Lewis", 14.90);
+        var book3 = Book.of("4444444443", "Book Three", "Tolkien", 16.90);
 
         jdbcAggregateTemplate.insert(book1);
         jdbcAggregateTemplate.insert(book2);
@@ -104,9 +106,9 @@ class BookRepositoryJdbcTests {
         var books = bookRepository.findAllByAuthor("Lewis");
 
         assertThat(books)
-                .extracting(Book::isbn)
-                .contains("1111111111", "2222222222")
-                .doesNotContain("3333333333");
+                .hasSize(2)
+                .extracting(Book::author)
+                .containsOnly("Lewis");
     }
 
     @Test
@@ -135,7 +137,6 @@ class BookRepositoryJdbcTests {
                         "Author",
                         "Polarsophia",
                         12.90
-
                 )
         );
 

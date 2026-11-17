@@ -1,6 +1,5 @@
 package com.polarbookshop.catalogservice.web;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.polarbookshop.catalogservice.domain.Book;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +20,7 @@ class BookJsonTests {
     @Test
     void testSerialize() throws IOException {
         var now = Instant.parse("2026-10-01T10:15:30Z");
+
         var book = new Book(
                 394L,
                 "1234567890",
@@ -30,6 +30,8 @@ class BookJsonTests {
                 9.90,
                 now,
                 now,
+                null,
+                null,
                 21
         );
 
@@ -84,6 +86,8 @@ class BookJsonTests {
                     "price": 9.90,
                     "createdDate": "2026-10-01T10:15:30Z",
                     "lastModifiedDate": "2026-10-01T10:15:30Z",
+                    "createdBy": null,
+                    "lastModifiedBy": null,
                     "version": 21
                 }
                 """;
@@ -100,6 +104,8 @@ class BookJsonTests {
                         9.90,
                         instant,
                         instant,
+                        null,
+                        null,
                         21
                 ));
     }
